@@ -1,0 +1,10 @@
+{
+  "name": "Job Seekers",
+  "short_name": "Job Seekers",
+  "description": "Find your next opportunity.",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#f6f8f7",
+  "theme_color": "#082f2c",
+  "icons": []
+}

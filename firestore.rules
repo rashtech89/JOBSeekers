@@ -1,0 +1,52 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // An admin is any signed-in account that has a document at admins/<its uid>.
+    // Admin documents can only be created from the Firebase console, never from the website.
+    function isAdmin() {
+      return request.auth != null
+        && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
+    }
+    function isOwner(uid) {
+      return request.auth != null && request.auth.uid == uid;
+    }
+
+    match /admins/{uid} {
+      allow get: if isOwner(uid);   // lets the site check "am I an admin?"
+      allow list, write: if false;
+    }
+
+    // Site branding/settings: everyone can read, only admins can write known fields.
+    match /siteSettings/{docId} {
+      allow read: if true;
+      allow write: if isAdmin()
+        && request.resource.data.keys().hasOnly(['siteName','tagline','primaryColor','headerCover','logo','footerDescription','updatedAt'])
+        && request.resource.data.siteName is string && request.resource.data.siteName.size() <= 80
+        && request.resource.data.tagline is string && request.resource.data.tagline.size() <= 120
+        && request.resource.data.primaryColor is string && request.resource.data.primaryColor.size() <= 20
+        && request.resource.data.footerDescription is string && request.resource.data.footerDescription.size() <= 300
+        && request.resource.data.logo is string && request.resource.data.logo.size() <= 500000
+        && request.resource.data.headerCover is string && request.resource.data.headerCover.size() <= 500000;
+    }
+
+    // Private account profile: a user can create and read their own; accountType cannot be changed later.
+    match /users/{uid} {
+      allow read: if isOwner(uid) || isAdmin();
+      allow create: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName','accountType','createdAt'])
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80
+        && request.resource.data.accountType in ['seeker','employer','hr']
+        && request.resource.data.createdAt == request.time;
+      allow update: if isOwner(uid)
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
+        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80;
+      allow delete: if false;
+    }
+
+    // Everything else stays closed until a later step opens it deliberately.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

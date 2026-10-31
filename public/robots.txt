@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /admin
+Disallow: /employer
+Disallow: /account
+Sitemap: https://YOUR-DOMAIN.example/sitemap.xml
