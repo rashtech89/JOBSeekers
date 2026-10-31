@@ -27,6 +27,7 @@ jobs:
       - name: Build
         run: npm run build
         env:
+          # Sub-path for a project site (https://USER.github.io/REPO/). Change to "/" for a USER.github.io repository or a custom domain.
           VITE_BASE: /${{ github.event.repository.name }}/
           VITE_ADMIN_PATH: ${{ vars.VITE_ADMIN_PATH }}
           VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
@@ -35,7 +36,7 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
-      - name: Single-page-app fallback
+      - name: Single-page-app fallback (refresh on any page keeps working)
         run: cp dist/index.html dist/404.html
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
