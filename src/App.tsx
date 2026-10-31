@@ -21,6 +21,7 @@ export default function App() {
     <Route path="job/:id" element={<JobDetail/>}/>
     <Route path="employer/upload" element={<Upload/>}/>
     <Route path="cv-builder" element={<CvBuilder/>}/>
+    <Route path="p/:slug" element={<StaticPage/>}/>
     <Route path="login" element={<AuthPage mode="login"/>}/>
     <Route path="register" element={<AuthPage mode="register"/>}/>
     <Route path="account" element={<Account/>}/>

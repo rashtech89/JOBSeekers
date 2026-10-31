@@ -46,7 +46,6 @@ export function SiteSettingsProvider({ children }: { children: ReactNode }) {
   const [settings, setSettings] = useState<BrandingSettings>(readCache)
 
   useEffect(() => {
-    document.documentElement.style.setProperty('--green', settings.primaryColor)
     document.title = `${settings.siteName} | ${settings.tagline}`
   }, [settings])
 

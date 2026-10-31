@@ -17,26 +17,38 @@ service cloud.firestore {
       allow list, write: if false;
     }
 
-    // Site branding/settings: everyone can read, only admins can write known fields.
+    // Site settings. Everyone can read; only admins can write.
+    //   main        = branding (name, logo, cover, colour, footer text)
+    //   navigation / footer / theme / texts = menu, contact and social links, whole-site theme, edited texts
     match /siteSettings/{docId} {
       allow read: if true;
-      allow write: if isAdmin()
-        && request.resource.data.keys().hasOnly(['siteName','tagline','primaryColor','headerCover','logo','footerDescription','updatedAt'])
-        && request.resource.data.siteName is string && request.resource.data.siteName.size() <= 80
-        && request.resource.data.tagline is string && request.resource.data.tagline.size() <= 120
-        && request.resource.data.primaryColor is string && request.resource.data.primaryColor.size() <= 20
-        && request.resource.data.footerDescription is string && request.resource.data.footerDescription.size() <= 300
-        && request.resource.data.logo is string && request.resource.data.logo.size() <= 500000
-        && request.resource.data.headerCover is string && request.resource.data.headerCover.size() <= 500000;
+      allow write: if isAdmin() && (
+        (docId == 'main'
+          && request.resource.data.keys().hasOnly(['siteName','tagline','primaryColor','headerCover','logo','footerDescription','updatedAt'])
+          && request.resource.data.siteName is string && request.resource.data.siteName.size() <= 80
+          && request.resource.data.tagline is string && request.resource.data.tagline.size() <= 120
+          && request.resource.data.primaryColor is string && request.resource.data.primaryColor.size() <= 20
+          && request.resource.data.footerDescription is string && request.resource.data.footerDescription.size() <= 300
+          && request.resource.data.logo is string && request.resource.data.logo.size() <= 500000
+          && request.resource.data.headerCover is string && request.resource.data.headerCover.size() <= 500000)
+        || docId in ['navigation', 'footer', 'theme', 'texts']
+      );
+    }
+
+    // Custom page content (Privacy, Terms, About ...). Public read, admin write.
+    match /pages/{slug} {
+      allow read: if true;
+      allow write: if isAdmin() && slug.matches('^[a-z0-9-]{1,60}$');
     }
 
     // Private account profile: a user can create and read their own; accountType cannot be changed later.
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       allow create: if isOwner(uid)
-        && request.resource.data.keys().hasOnly(['displayName','accountType','createdAt'])
+        && request.resource.data.keys().hasOnly(['displayName','accountType','email','createdAt'])
         && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80
         && request.resource.data.accountType in ['seeker','employer','hr']
+        && (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 200))
         && request.resource.data.createdAt == request.time;
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])

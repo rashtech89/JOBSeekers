@@ -1,38 +1,46 @@
-import { Link, NavLink, Outlet, useLocation } from 'react-router-dom'
+import { Link, Outlet, useLocation } from 'react-router-dom'
 import { BriefcaseBusiness, Globe2, Menu, Moon, Search, Sun, UserRound, X, ChevronRight } from 'lucide-react'
 import { useState } from 'react'
 import { useLang } from '../i18n/LanguageContext'
 import { languages, type Lang } from '../i18n/translations'
 import { useSiteSettings } from '../context/SiteSettings'
+import { useContent } from '../context/Content'
 import { useTheme } from '../context/Theme'
 import { useAuth } from '../context/Auth'
+import { safeHref, type NavItem } from '../lib/siteContent'
+import SmartLink from './SmartLink'
 import Disclaimer from './Disclaimer'
+
+const KNOWN_GROUPS = ['main', 'explore', 'employers', 'account', 'management', 'support', 'legal']
+const SOCIALS = [['facebook', 'Facebook', 'f'], ['instagram', 'Instagram', 'IG'], ['tiktok', 'TikTok', 'TT'], ['youtube', 'YouTube', 'YT'], ['linkedin', 'LinkedIn', 'in'], ['x', 'X', 'X'], ['telegram', 'Telegram', 'TG']] as const
 
 export default function Layout() {
   const [menuOpen, setMenuOpen] = useState(false)
   const { lang, setLang, t } = useLang()
   const { settings } = useSiteSettings()
+  const { nav, footer } = useContent()
   const { theme, toggle } = useTheme()
   const { user } = useAuth()
   const location = useLocation()
   const [menuSearch, setMenuSearch] = useState('')
-  const menuItems = [
-    { label: t('nav.home'), to: '/', group: t('group.main') },
-    { label: t('nav.jobs'), to: '/jobs', group: t('group.main') },
-    { label: t('nav.cv'), to: '/cv-builder', group: t('group.main') },
-    { label: t('nav.companies'), to: '/companies', group: t('group.explore') },
-    { label: t('nav.employers'), to: '/employer', group: t('group.employers') },
-    { label: t('nav.post'), to: '/employer/upload', group: t('group.employers') },
-    { label: t('nav.login'), to: '/login', group: t('group.account') },
-    { label: t('nav.register'), to: '/register', group: t('group.account') },
-    { label: t('nav.contact'), to: '/contact', group: t('group.support') },
-    { label: t('nav.help'), to: '/help', group: t('group.support') },
-    { label: t('nav.safety'), to: '/safety', group: t('group.support') },
-    { label: t('nav.privacy'), to: '/privacy', group: t('group.legal') },
-    { label: t('nav.terms'), to: '/terms', group: t('group.legal') },
-    { label: t('nav.cookies'), to: '/cookies', group: t('group.legal') },
-  ]
-  const filteredMenuItems = menuItems.filter(item => item.label.toLowerCase().includes(menuSearch.toLowerCase()))
+
+  const labelOf = (it: NavItem) => it.label?.[lang]?.trim() || (it.labelKey ? t(it.labelKey) : it.label?.en?.trim() || it.id)
+  const groupOf = (g: string) => (KNOWN_GROUPS.includes(g) ? t(`group.${g}`) : t('group.more'))
+  const active = nav.filter(i => i.enabled)
+  const headerItems = active.filter(i => i.header)
+  const menuItems = active.filter(i => i.menu).map(i => ({ ...i, text: labelOf(i), groupText: groupOf(i.group) }))
+  const filtered = menuItems.filter(i => i.text.toLowerCase().includes(menuSearch.toLowerCase()))
+  const footerItems = active.filter(i => i.footer)
+  const colExplore = footerItems.filter(i => !['support', 'legal'].includes(i.group))
+  const colSupport = footerItems.filter(i => i.group === 'support')
+  const colLegal = footerItems.filter(i => i.group === 'legal')
+  const postItem = active.find(i => i.id === 'post')
+
+  const digits = (s: string) => s.replace(/[^\d]/g, '')
+  const hasContact = !!(footer.email || footer.phone || footer.whatsapp || footer.address)
+  const socials = SOCIALS.filter(([k]) => safeHref(footer[k]).startsWith('https'))
+  const col = (title: string, items: NavItem[]) => items.length > 0 && <div className="footer-links"><h4>{title}</h4>{items.map(i => <SmartLink key={i.id} to={i.to}>{labelOf(i)}</SmartLink>)}</div>
+
   return (
     <div className="app-shell">
       <header className="site-header">
@@ -42,15 +50,13 @@ export default function Layout() {
         </Link>
         <button className="icon-button mobile-menu" onClick={() => setMenuOpen(!menuOpen)} aria-label={t('drawer.open')}>{menuOpen ? <X /> : <Menu />}</button>
         <nav className={menuOpen ? 'main-nav open' : 'main-nav'}>
-          <NavLink to="/jobs">{t('nav.jobs')}</NavLink>
-          <NavLink to="/cv-builder">{t('nav.cv')}</NavLink><NavLink to="/companies">{t('nav.companies')}</NavLink>
-          <NavLink to="/employer">{t('nav.employers')}</NavLink>
+          {headerItems.map(i => <SmartLink key={i.id} to={i.to} nav>{labelOf(i)}</SmartLink>)}
         </nav>
         <div className="header-actions">
           <button className="icon-button theme-toggle" onClick={toggle} aria-label={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')} title={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')}>{theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}</button>
           <label className="language-select"><Globe2 size={16}/><select value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label={t('lang.label')}>{languages.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}</select></label>
           {user ? <Link to="/account" className="login-link"><UserRound size={16}/> {user.displayName?.split(' ')[0] || t('auth.account')}</Link> : <Link to="/login" className="login-link"><UserRound size={16}/> {t('nav.signin')}</Link>}
-          <Link to="/employer/upload" className="button button-primary header-post">{t('nav.post')}</Link>
+          {postItem && <SmartLink to={postItem.to} className="button button-primary header-post">{labelOf(postItem)}</SmartLink>}
         </div>
       </header>
       {menuOpen && <div className="menu-backdrop" onClick={() => setMenuOpen(false)}>
@@ -58,8 +64,8 @@ export default function Layout() {
           <div className="drawer-heading"><div><span className="eyebrow">{t('drawer.eyebrow')}</span><h2>{t('drawer.title')}</h2></div><button className="drawer-close" onClick={() => setMenuOpen(false)} aria-label={t('drawer.close')}><X size={20}/></button></div>
           <label className="drawer-search"><Search size={17}/><input value={menuSearch} onChange={e => setMenuSearch(e.target.value)} placeholder={t('drawer.search')} autoFocus /></label>
           <div className="drawer-results">
-            {filteredMenuItems.map(item => <Link key={item.to} to={item.to} onClick={() => setMenuOpen(false)}><span><small>{item.group}</small><strong>{item.label}</strong></span><ChevronRight size={17}/></Link>)}
-            {filteredMenuItems.length === 0 && <p className="drawer-empty">{t('drawer.empty')}</p>}
+            {filtered.map(i => <SmartLink key={i.id} to={i.to} onClick={() => setMenuOpen(false)}><span><small>{i.groupText}</small><strong>{i.text}</strong></span><ChevronRight size={17}/></SmartLink>)}
+            {filtered.length === 0 && <p className="drawer-empty">{t('drawer.empty')}</p>}
           </div>
         </aside>
       </div>}
@@ -71,10 +77,21 @@ export default function Layout() {
             <p>{settings.footerDescription}</p>
             <Disclaimer compact />
           </div>
-          <div><h4>{t('footer.explore')}</h4><Link to="/jobs">{t('nav.jobs')}</Link><Link to="/cv-builder">{t('nav.cv')}</Link><Link to="/companies">{t('nav.companies')}</Link><Link to="/employer/upload">{t('nav.post')}</Link></div>
-          <div><h4>{t('footer.support')}</h4><Link to="/contact">{t('nav.contact')}</Link><Link to="/help">{t('nav.help')}</Link><Link to="/safety">{t('nav.safety')}</Link></div>
-          <div><h4>{t('footer.legal')}</h4><Link to="/privacy">{t('nav.privacy')}</Link><Link to="/terms">{t('nav.terms')}</Link><Link to="/cookies">{t('nav.cookies')}</Link></div>
-          <div><h4>{t('footer.follow')}</h4><a href="#" aria-label="Facebook">Facebook</a><a href="#" aria-label="Instagram">Instagram</a><a href="#" aria-label="TikTok">TikTok</a><a href="#" aria-label="LinkedIn">LinkedIn</a></div>
+          {col(t('footer.explore'), colExplore)}
+          {col(t('footer.support'), colSupport)}
+          {col(t('footer.legal'), colLegal)}
+          {(hasContact || socials.length > 0 || footer.playStore || footer.appStore) && <div className="footer-links">
+            {hasContact && <><h4>{t('footer.contact')}</h4>
+              {footer.email && <a href={`mailto:${footer.email}`}>{footer.email}</a>}
+              {footer.phone && <a href={`tel:+${digits(footer.phone)}`}>{footer.phone}</a>}
+              {footer.whatsapp && <a href={`https://wa.me/${digits(footer.whatsapp)}`} target="_blank" rel="noreferrer noopener">WhatsApp {footer.whatsapp}</a>}
+              {footer.address && <span>{footer.address}</span>}</>}
+            {socials.length > 0 && <><h4>{t('footer.follow')}</h4><div className="social-row">{socials.map(([k, name, short]) => <a key={k} href={safeHref(footer[k])} target="_blank" rel="noreferrer noopener" aria-label={name} title={name}>{short}</a>)}</div></>}
+            {(safeHref(footer.playStore).startsWith('https') || safeHref(footer.appStore).startsWith('https')) && <div className="store-badges">
+              {safeHref(footer.playStore).startsWith('https') && <a href={footer.playStore} target="_blank" rel="noreferrer noopener">{t('store.google')}</a>}
+              {safeHref(footer.appStore).startsWith('https') && <a href={footer.appStore} target="_blank" rel="noreferrer noopener">{t('store.apple')}</a>}
+            </div>}
+          </div>}
         </div>
         <div className="footer-bottom"><span>© {new Date().getFullYear()} {settings.siteName}. {t('footer.rights')}</span><span>{t('footer.built')}</span></div>
       </footer>

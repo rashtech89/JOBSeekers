@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { languages, translations, type Lang } from './translations'
+import { useContent } from '../context/Content'
 
 type Ctx = { lang: Lang; setLang: (l: Lang) => void; t: (key: string) => string; dir: 'ltr' | 'rtl' }
 const LanguageContext = createContext<Ctx | null>(null)
@@ -15,6 +16,7 @@ function initialLang(): Lang {
 
 export function LanguageProvider({ children }: { children: ReactNode }) {
   const [lang, setLangState] = useState<Lang>(initialLang)
+  const { overrides } = useContent()
   const dir = languages.find(l => l.code === lang)?.dir ?? 'ltr'
 
   useEffect(() => {
@@ -28,7 +30,7 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [])
 
   // Falls back to English, then to the key itself, so a missing translation never breaks the page.
-  const t = useCallback((key: string) => translations[lang][key] ?? translations.en[key] ?? key, [lang])
+  const t = useCallback((key: string) => overrides[key]?.[lang] || translations[lang][key] || translations.en[key] || key, [lang, overrides])
   const value = useMemo(() => ({ lang, setLang, t, dir }), [lang, setLang, t, dir])
   return <LanguageContext.Provider value={value}>{children}</LanguageContext.Provider>
 }

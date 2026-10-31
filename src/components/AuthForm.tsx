@@ -12,6 +12,9 @@ function errorKey(code?: string): string {
     case 'auth/invalid-email': return 'auth.err.email'
     case 'auth/too-many-requests': return 'auth.err.many'
     case 'auth/network-request-failed': return 'auth.err.network'
+    case 'auth/operation-not-allowed': return 'auth.err.google'
+    case 'auth/popup-blocked': return 'auth.err.popup'
+    case 'auth/popup-closed-by-user': case 'auth/cancelled-popup-request': return ''
     case 'auth/not-configured': return 'auth.notConfigured'
     default: return 'auth.err.generic'
   }
@@ -19,7 +22,7 @@ function errorKey(code?: string): string {
 
 export default function AuthForm({ initialMode = 'login', onDone }: { initialMode?: AuthMode; onDone?: () => void }) {
   const { t } = useLang()
-  const { login, register, resetPassword } = useAuth()
+  const { login, register, resetPassword, loginWithGoogle } = useAuth()
   const [mode, setMode] = useState<AuthMode>(initialMode)
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
@@ -39,8 +42,16 @@ export default function AuthForm({ initialMode = 'login', onDone }: { initialMod
       else if (mode === 'register') { await register(email.trim(), password, name.trim(), type); setInfo(t('auth.verifySent')); onDone?.() }
       else { await resetPassword(email.trim()); setInfo(t('auth.reset.sent')) }
     } catch (err) {
-      setError(t(errorKey((err as { code?: string }).code)))
+      const key = errorKey((err as { code?: string }).code)
+      setError(key ? t(key) : '')
     } finally { setBusy(false) }
+  }
+
+  async function google() {
+    setError(''); setInfo(''); setBusy(true)
+    try { await loginWithGoogle(); onDone?.() }
+    catch (err) { const key = errorKey((err as { code?: string }).code); setError(key ? t(key) : '') }
+    finally { setBusy(false) }
   }
 
   const title = mode === 'login' ? t('auth.login.title') : mode === 'register' ? t('auth.register.title') : t('auth.reset.title')
@@ -63,6 +74,7 @@ export default function AuthForm({ initialMode = 'login', onDone }: { initialMod
     <button className="button button-primary full-button" type="submit" disabled={busy}>
       {busy ? t('auth.loading') : mode === 'login' ? t('auth.submit.login') : mode === 'register' ? t('auth.submit.register') : t('auth.reset.submit')}
     </button>
+    {mode !== 'reset' && <><div className="auth-divider">{t('auth.or')}</div><button type="button" className="button button-outline full-button" onClick={google} disabled={busy}>{t('auth.google')}</button></>}
     <div className="auth-links">
       {mode === 'login' && <><button type="button" onClick={() => setMode('reset')}>{t('auth.forgot')}</button><button type="button" onClick={() => setMode('register')}>{t('auth.noAccount')}</button></>}
       {mode === 'register' && <button type="button" onClick={() => setMode('login')}>{t('auth.haveAccount')}</button>}
