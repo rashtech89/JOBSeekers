@@ -77,6 +77,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     async refreshUser() {
       if (!auth?.currentUser) return
       await reload(auth.currentUser)
+      await auth.currentUser.getIdToken(true) // refresh the token so security rules see email_verified = true
       setUser(auth.currentUser)
       setVersion(v => v + 1)
     },

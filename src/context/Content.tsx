@@ -2,13 +2,13 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useState, t
 import { doc, onSnapshot, serverTimestamp, setDoc } from 'firebase/firestore'
 import { db } from '../lib/firebase'
 import {
-  defaultNav, defaultTheme, emptyFooter, sanitizeFooter, sanitizeNav, sanitizeOverrides, sanitizeTheme,
-  type FooterSettings, type NavItem, type TextOverrides, type ThemeSettings,
+  defaultHome, defaultNav, defaultTheme, emptyFooter, sanitizeFooter, sanitizeHome, sanitizeNav, sanitizeOverrides, sanitizeTheme,
+  type FooterSettings, type HomeSection, type NavItem, type TextOverrides, type ThemeSettings,
 } from '../lib/siteContent'
 
-export type ContentDoc = 'navigation' | 'footer' | 'theme' | 'texts'
+export type ContentDoc = 'navigation' | 'footer' | 'theme' | 'texts' | 'home'
 type Ctx = {
-  nav: NavItem[]; footer: FooterSettings; theme: ThemeSettings; overrides: TextOverrides
+  nav: NavItem[]; footer: FooterSettings; theme: ThemeSettings; overrides: TextOverrides; home: HomeSection[]
   save: (docId: ContentDoc, data: Record<string, unknown>) => Promise<{ ok: boolean; error?: string }>
 }
 const ContentContext = createContext<Ctx | null>(null)
@@ -23,7 +23,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     if (!db) return
-    const unsubs = (['navigation', 'footer', 'theme', 'texts'] as const).map(id =>
+    const unsubs = (['navigation', 'footer', 'theme', 'texts', 'home'] as const).map(id =>
       onSnapshot(doc(db!, 'siteSettings', id), snap => {
         if (!snap.exists()) return
         setRaw(prev => {
@@ -51,6 +51,7 @@ export function ContentProvider({ children }: { children: ReactNode }) {
     footer: raw.footer ? sanitizeFooter(raw.footer) : emptyFooter,
     theme: raw.theme ? sanitizeTheme(raw.theme) : defaultTheme,
     overrides: sanitizeOverrides((raw.texts as { overrides?: unknown } | undefined)?.overrides),
+    home: raw.home ? sanitizeHome((raw.home as { sections?: unknown }).sections) : defaultHome,
     save,
   }), [raw, save])
 

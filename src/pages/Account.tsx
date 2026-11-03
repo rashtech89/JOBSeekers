@@ -36,7 +36,10 @@ export default function Account() {
           {msg && <p className="small-note" role="status">{msg}</p>}
         </div>}
     <p className="small-note">{t('acct.soon')}</p>
-    <Link className="button button-primary full-button" to="/">{t('acct.goHome')}</Link>
+    <Link className="button button-primary full-button" to="/profile">My profile</Link>
+    <Link className="button button-outline full-button" to="/network">My network</Link>
+    <Link className="button button-outline full-button" to="/messages">Messages</Link>
+    <Link className="button button-outline full-button" to="/">{t('acct.goHome')}</Link>
     <Link className="button button-outline full-button" to="/jobs">{t('acct.explore')}</Link>
     <button className="button button-outline full-button" onClick={() => { void logout() }}>{t('auth.logout')}</button>
   </div></div>

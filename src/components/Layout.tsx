@@ -10,6 +10,8 @@ import { useAuth } from '../context/Auth'
 import { safeHref, type NavItem } from '../lib/siteContent'
 import SmartLink from './SmartLink'
 import Disclaimer from './Disclaimer'
+import CountrySelect from './CountrySelect'
+import NotificationBell from './NotificationBell'
 
 const KNOWN_GROUPS = ['main', 'explore', 'employers', 'account', 'management', 'support', 'legal']
 const SOCIALS = [['facebook', 'Facebook', 'f'], ['instagram', 'Instagram', 'IG'], ['tiktok', 'TikTok', 'TT'], ['youtube', 'YouTube', 'YT'], ['linkedin', 'LinkedIn', 'in'], ['x', 'X', 'X'], ['telegram', 'Telegram', 'TG']] as const
@@ -54,7 +56,9 @@ export default function Layout() {
         </nav>
         <div className="header-actions">
           <button className="icon-button theme-toggle" onClick={toggle} aria-label={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')} title={theme === 'dark' ? t('theme.toLight') : t('theme.toDark')}>{theme === 'dark' ? <Sun size={18}/> : <Moon size={18}/>}</button>
+          <CountrySelect />
           <label className="language-select"><Globe2 size={16}/><select value={lang} onChange={e => setLang(e.target.value as Lang)} aria-label={t('lang.label')}>{languages.map(l => <option key={l.code} value={l.code}>{l.label}</option>)}</select></label>
+          {user && <NotificationBell />}
           {user ? <Link to="/account" className="login-link"><UserRound size={16}/> {user.displayName?.split(' ')[0] || t('auth.account')}</Link> : <Link to="/login" className="login-link"><UserRound size={16}/> {t('nav.signin')}</Link>}
           {postItem && <SmartLink to={postItem.to} className="button button-primary header-post">{labelOf(postItem)}</SmartLink>}
         </div>

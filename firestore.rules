@@ -2,8 +2,8 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    // An admin is any signed-in account that has a document at admins/<its uid>.
-    // Admin documents can only be created from the Firebase console, never from the website.
+    // ---------- helpers ----------
+    // An admin is a signed-in account that has a document at admins/<its uid>.
     function isAdmin() {
       return request.auth != null
         && exists(/databases/$(database)/documents/admins/$(request.auth.uid));
@@ -11,52 +11,199 @@ service cloud.firestore {
     function isOwner(uid) {
       return request.auth != null && request.auth.uid == uid;
     }
-
-    match /admins/{uid} {
-      allow get: if isOwner(uid);   // lets the site check "am I an admin?"
-      allow list, write: if false;
+    // Posting, liking, commenting, connecting and messaging need a verified email (Google accounts are verified).
+    function verified() {
+      return request.auth != null && request.auth.token.email_verified == true;
+    }
+    function strMax(v, n) {
+      return v is string && v.size() <= n;
     }
 
-    // Site settings. Everyone can read; only admins can write.
-    //   main        = branding (name, logo, cover, colour, footer text)
-    //   navigation / footer / theme / texts = menu, contact and social links, whole-site theme, edited texts
+    // ---------- admins ----------
+    // The first admin is created by hand in the Firebase console. Admins can add/remove other admins in the Users tab.
+    match /admins/{uid} {
+      allow get: if isOwner(uid) || isAdmin();
+      allow list: if isAdmin();
+      allow create: if isAdmin() && request.resource.data.keys().hasOnly(['role', 'grantedAt']);
+      allow delete: if isAdmin() && request.auth.uid != uid;   // an admin cannot remove themselves
+      allow update: if false;
+    }
+
+    // ---------- site content (admin edits, everyone reads) ----------
     match /siteSettings/{docId} {
       allow read: if true;
       allow write: if isAdmin() && (
         (docId == 'main'
           && request.resource.data.keys().hasOnly(['siteName','tagline','primaryColor','headerCover','logo','footerDescription','updatedAt'])
-          && request.resource.data.siteName is string && request.resource.data.siteName.size() <= 80
-          && request.resource.data.tagline is string && request.resource.data.tagline.size() <= 120
-          && request.resource.data.primaryColor is string && request.resource.data.primaryColor.size() <= 20
-          && request.resource.data.footerDescription is string && request.resource.data.footerDescription.size() <= 300
-          && request.resource.data.logo is string && request.resource.data.logo.size() <= 500000
-          && request.resource.data.headerCover is string && request.resource.data.headerCover.size() <= 500000)
-        || docId in ['navigation', 'footer', 'theme', 'texts']
+          && strMax(request.resource.data.siteName, 80)
+          && strMax(request.resource.data.tagline, 120)
+          && strMax(request.resource.data.primaryColor, 20)
+          && strMax(request.resource.data.footerDescription, 300)
+          && strMax(request.resource.data.logo, 500000)
+          && strMax(request.resource.data.headerCover, 500000))
+        || docId in ['navigation', 'footer', 'theme', 'texts', 'home']
       );
     }
-
-    // Custom page content (Privacy, Terms, About ...). Public read, admin write.
     match /pages/{slug} {
       allow read: if true;
       allow write: if isAdmin() && slug.matches('^[a-z0-9-]{1,60}$');
     }
 
-    // Private account profile: a user can create and read their own; accountType cannot be changed later.
+    // ---------- jobs ----------
+    // Visitors see published/expired jobs. Verified members can submit a job as "pending"; only admins approve, edit or delete.
+    match /jobs/{jobId} {
+      allow read: if isAdmin() || resource.data.status in ['published', 'expired'];
+      allow create: if isAdmin() || (
+        verified()
+        && request.resource.data.keys().hasOnly(['company','countryCode','city','positions','generalRequirements','howToApply','phones','emails','mapsUrl','applyUrl','tags','status','hasPoster','posterId','postedAt','createdAt','source','createdBy'])
+        && request.resource.data.status == 'pending'
+        && request.resource.data.source == 'user'
+        && request.resource.data.createdBy == request.auth.uid
+        && request.resource.data.positions is list && request.resource.data.positions.size() <= 5
+        && strMax(request.resource.data.company, 120)
+        && strMax(request.resource.data.city, 100)
+        && strMax(request.resource.data.countryCode, 2)
+      );
+      allow update, delete: if isAdmin();
+    }
+    // Poster pictures (compressed, stored apart from the job so lists stay light).
+    match /jobImages/{imgId} {
+      allow read: if true;
+      allow create: if isAdmin() || (
+        verified()
+        && request.resource.data.keys().hasOnly(['data', 'createdAt', 'createdBy'])
+        && strMax(request.resource.data.data, 450000)
+        && request.resource.data.createdBy == request.auth.uid
+      );
+      allow update, delete: if isAdmin();
+    }
+
+    // ---------- accounts and profiles ----------
     match /users/{uid} {
       allow read: if isOwner(uid) || isAdmin();
       allow create: if isOwner(uid)
         && request.resource.data.keys().hasOnly(['displayName','accountType','email','createdAt'])
-        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80
+        && strMax(request.resource.data.displayName, 80)
         && request.resource.data.accountType in ['seeker','employer','hr']
-        && (!('email' in request.resource.data) || (request.resource.data.email is string && request.resource.data.email.size() <= 200))
+        && (!('email' in request.resource.data) || strMax(request.resource.data.email, 200))
         && request.resource.data.createdAt == request.time;
       allow update: if isOwner(uid)
         && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['displayName'])
-        && request.resource.data.displayName is string && request.resource.data.displayName.size() <= 80;
+        && strMax(request.resource.data.displayName, 80);
       allow delete: if false;
     }
+    // Profile visibility: private = only the owner, members = signed-in users, public = anyone with the link.
+    match /profiles/{uid} {
+      allow read: if isOwner(uid) || isAdmin()
+        || resource.data.visibility == 'public'
+        || (request.auth != null && resource.data.visibility == 'members');
+      allow create, update: if isOwner(uid)
+        && request.resource.data.keys().hasOnly(['displayName','headline','location','countryCode','about','accountType','photo','cover','skills','certificates','languages','experience','education','openToWork','visibility','updatedAt'])
+        && request.resource.data.visibility in ['members','public','private']
+        && request.resource.data.accountType in ['seeker','employer','hr']
+        && strMax(request.resource.data.displayName, 80)
+        && strMax(request.resource.data.headline, 200)
+        && strMax(request.resource.data.about, 2600)
+        && strMax(request.resource.data.photo, 80000)
+        && strMax(request.resource.data.cover, 250000);
+      allow delete: if isOwner(uid) || isAdmin();
+    }
 
-    // Everything else stays closed until a later step opens it deliberately.
+    // ---------- community feed ----------
+    match /feed/{postId} {
+      allow read: if true;
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly(['authorId','authorName','authorHeadline','text','image','createdAt'])
+        && request.resource.data.authorId == request.auth.uid
+        && strMax(request.resource.data.authorName, 80)
+        && strMax(request.resource.data.authorHeadline, 200)
+        && strMax(request.resource.data.text, 1000)
+        && strMax(request.resource.data.image, 300000)
+        && request.resource.data.createdAt == request.time;
+      allow delete: if isAdmin() || (request.auth != null && resource.data.authorId == request.auth.uid);
+      allow update: if false;
+
+      match /likes/{likeUid} {
+        allow read: if true;
+        allow create: if verified() && likeUid == request.auth.uid && request.resource.data.keys().hasOnly(['createdAt']);
+        allow delete: if isAdmin() || likeUid == request.auth.uid;
+        allow update: if false;
+      }
+      match /comments/{commentId} {
+        allow read: if true;
+        allow create: if verified()
+          && request.resource.data.keys().hasOnly(['authorId','authorName','text','createdAt'])
+          && request.resource.data.authorId == request.auth.uid
+          && strMax(request.resource.data.authorName, 80)
+          && strMax(request.resource.data.text, 300)
+          && request.resource.data.createdAt == request.time;
+        allow delete: if isAdmin() || (request.auth != null && resource.data.authorId == request.auth.uid);
+        allow update: if false;
+      }
+    }
+    match /reports/{reportId} {
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly(['postId','reporterId','reason','createdAt'])
+        && request.resource.data.reporterId == request.auth.uid
+        && strMax(request.resource.data.postId, 100)
+        && strMax(request.resource.data.reason, 300);
+      allow read, delete: if isAdmin();
+      allow update: if false;
+    }
+
+    // ---------- connections, notifications, messages ----------
+    // A connection document id is "<uidA>_<uidB>". Only the two people (and admins) can read it.
+    match /connections/{cid} {
+      allow read: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.users);
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly(['users','from','to','fromName','toName','status','createdAt'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.to != request.auth.uid
+        && request.resource.data.users.size() == 2
+        && request.auth.uid in request.resource.data.users
+        && request.resource.data.to in request.resource.data.users
+        && cid in [request.auth.uid + '_' + request.resource.data.to, request.resource.data.to + '_' + request.auth.uid]
+        && request.resource.data.status == 'pending'
+        && strMax(request.resource.data.fromName, 80)
+        && strMax(request.resource.data.toName, 80);
+      allow update: if request.auth != null
+        && request.auth.uid == resource.data.to
+        && resource.data.status == 'pending'
+        && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status'])
+        && request.resource.data.status == 'accepted';
+      allow delete: if isAdmin() || (request.auth != null && request.auth.uid in resource.data.users);
+    }
+    // Notifications can only be sent to someone you already have a connection with.
+    match /notifications/{uid}/items/{nid} {
+      allow read, delete: if isOwner(uid);
+      allow update: if isOwner(uid) && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['read']);
+      allow create: if verified()
+        && request.resource.data.keys().hasOnly(['type','from','fromName','read','createdAt'])
+        && request.resource.data.from == request.auth.uid
+        && request.resource.data.type in ['connection_request','connection_accepted','message']
+        && request.resource.data.read == false
+        && strMax(request.resource.data.fromName, 80)
+        && (exists(/databases/$(database)/documents/connections/$(request.auth.uid + '_' + uid))
+            || exists(/databases/$(database)/documents/connections/$(uid + '_' + request.auth.uid)));
+    }
+    // Messages work only inside an accepted connection. The chat id equals the connection id.
+    match /chats/{chatId}/messages/{messageId} {
+      function inAcceptedChat() {
+        return request.auth != null
+          && exists(/databases/$(database)/documents/connections/$(chatId))
+          && get(/databases/$(database)/documents/connections/$(chatId)).data.status == 'accepted'
+          && request.auth.uid in get(/databases/$(database)/documents/connections/$(chatId)).data.users;
+      }
+      allow read: if isAdmin() || inAcceptedChat();
+      allow create: if verified() && inAcceptedChat()
+        && request.resource.data.keys().hasOnly(['from','text','createdAt'])
+        && request.resource.data.from == request.auth.uid
+        && strMax(request.resource.data.text, 1000)
+        && request.resource.data.createdAt == request.time;
+      allow update, delete: if isAdmin();
+    }
+
+    // Everything else stays closed.
     match /{document=**} {
       allow read, write: if false;
     }

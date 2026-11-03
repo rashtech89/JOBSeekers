@@ -172,3 +172,5 @@ body{background:radial-gradient(900px 520px at 88% -6%,var(--amb1,rgba(22,168,14
 .legal-page .cv-text{margin:0 0 12px;line-height:1.7;white-space:pre-line}
 .auth-divider{text-align:center;color:var(--muted);font-size:.9rem}
 .verify-box{display:grid;gap:8px}
+input[type='color']{height:46px;padding:4px;width:100%;cursor:pointer}
+.admin-tabs{overflow-x:auto}

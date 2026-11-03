@@ -94,3 +94,20 @@ export function sanitizeOverrides(raw: unknown): TextOverrides {
   }
   return out
 }
+
+export type HomeSection = { id: string; enabled: boolean }
+export const homeSectionNames: Record<string, string> = {
+  hero: 'Top banner and search', trust: 'Trust strip', categories: 'Job categories', latest: 'Latest / Last / Old jobs',
+  feed: 'News feed', people: 'People you may know', employer: 'Employer call-to-action',
+}
+export const defaultHome: HomeSection[] = Object.keys(homeSectionNames).map(id => ({ id, enabled: true }))
+export function sanitizeHome(raw: unknown): HomeSection[] {
+  const out: HomeSection[] = []
+  if (Array.isArray(raw)) for (const r of raw.slice(0, 20)) {
+    if (!r || typeof r !== 'object') continue
+    const o = r as Record<string, unknown>
+    if (typeof o.id === 'string' && o.id in homeSectionNames && !out.some(x => x.id === o.id)) out.push({ id: o.id, enabled: o.enabled !== false })
+  }
+  for (const d of defaultHome) if (!out.some(x => x.id === d.id)) out.push(d)
+  return out
+}

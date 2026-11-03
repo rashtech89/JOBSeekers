@@ -1,3 +1,5 @@
+import { countryName } from './countries'
+
 /** Resolves files in /public for both local dev and GitHub Pages (sub-path) hosting. */
 const asset = (path: string) => `${import.meta.env.BASE_URL}${path}`
 
@@ -25,8 +27,12 @@ export type Post = {
   id: string
   company?: string
   country?: string
+  countryCode?: string
+  posterId?: string
   city?: string
-  posterUrl: string
+  /** Poster image: a file path (demo data) or a data URL. For cloud jobs it is loaded on demand from jobImages/<id>. */
+  posterUrl?: string
+  hasPoster?: boolean
   positions: Position[]
   generalRequirements?: string[]
   howToApply?: string
@@ -49,6 +55,7 @@ export const demoPosts: Post[] = [
     id: 'post-gulf-driver',
     company: 'Gulf Eastern Group',
     country: 'Kuwait',
+    countryCode: 'KW',
     posterUrl: asset('demo/poster-gulf-driver.jpg'),
     positions: [{
       title: 'Heavy Vehicle Driver', subtitle: 'Trailer & Sewage Tanker Driver', category: 'Driving',
@@ -67,6 +74,7 @@ export const demoPosts: Post[] = [
     id: 'post-gulf-secretary-sales',
     company: 'Gulf Eastern Group',
     country: 'Kuwait',
+    countryCode: 'KW',
     posterUrl: asset('demo/poster-gulf-secretary-sales.jpg'),
     positions: [
       {
@@ -115,6 +123,7 @@ export const demoPosts: Post[] = [
     id: 'post-perfume',
     company: 'A reputed perfume company',
     country: 'Kuwait',
+    countryCode: 'KW',
     posterUrl: asset('demo/poster-perfume.jpg'),
     positions: [
       {
@@ -144,8 +153,6 @@ export function listingsFrom(posts: Post[]): Listing[] {
     .flatMap(post => post.positions.map((position, i) => ({ key: `${post.id}-${i}`, post, position })))
 }
 
-export const allListings = listingsFrom(demoPosts)
-export const findPost = (id?: string) => demoPosts.find(p => p.id === id && (p.status === 'published' || p.status === 'expired'))
 
 export function whatsappUrl(internationalNumber: string, message = 'Hello, I am interested in this job. Please share more details.') {
   const digits = internationalNumber.replace(/\D/g, '')
@@ -166,3 +173,10 @@ export function tabOf(post: Post, now: number = Date.now()): JobTab {
   if (ageDays <= TAB_LIMITS.latestDays) return 'latest'
   return ageDays <= TAB_LIMITS.lastDays ? 'last' : 'old'
 }
+
+export function postPlace(post: Post, lang: string): string {
+  const country = post.countryCode ? countryName(post.countryCode, lang) : post.country
+  return [post.city, country].filter(Boolean).join(', ')
+}
+/** "" means all countries. Posts with no country are shown only when all countries are selected. */
+export const inCountry = (post: Post, code: string) => !code || post.countryCode === code

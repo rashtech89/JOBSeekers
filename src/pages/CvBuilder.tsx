@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { Copy, Download, FilePlus2, Plus, Trash2 } from 'lucide-react'
 import { useLang } from '../i18n/LanguageContext'
 import { useSiteSettings } from '../context/SiteSettings'
+import { useContent } from '../context/Content'
 import { languages, type Lang } from '../i18n/translations'
 import CvSheet from '../components/CvSheet'
-import { cvLabels, loadCvs, newSaved, saveCvs, uid, type CvData, type SavedCv } from '../lib/cv'
+import { cvLabels, loadCvs, newSaved, saveCvs, uid, type CvData, type CvKey, type SavedCv } from '../lib/cv'
 
 function Field({ label, value, onChange, type = 'text', area = false, hint }: { label: string; value: string; onChange: (v: string) => void; type?: string; area?: boolean; hint?: string }) {
   return <label className="cv-field"><span>{label}</span>
@@ -41,7 +42,12 @@ function PreviewFrame({ children }: { children: ReactNode }) {
 export default function CvBuilder() {
   const { lang } = useLang()
   const { settings } = useSiteSettings()
-  const T = cvLabels[lang]
+  const { overrides } = useContent()
+  const T = useMemo(() => {
+    const base: Record<CvKey, string> = { ...cvLabels[lang] }
+    for (const k of Object.keys(base) as CvKey[]) { const v = overrides[`cv.${k}`]?.[lang]; if (v) base[k] = v }
+    return base
+  }, [lang, overrides])
   const [cvs, setCvs] = useState<SavedCv[]>(() => { const l = loadCvs(); return l.length ? l : [newSaved(lang)] })
   const [activeId, setActiveId] = useState<string>(() => cvs[0].id)
   const [saveFailed, setSaveFailed] = useState(false)

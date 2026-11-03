@@ -1,6 +1,10 @@
 import { Link, useParams } from 'react-router-dom'
 import { ArrowLeft, CalendarDays, CheckCircle2, Mail, MapPin, MessageCircle, Phone, ShieldCheck } from 'lucide-react'
-import { findPost, telUrl, whatsappUrl } from '../lib/jobs'
+import { useEffect, useState } from 'react'
+import { doc, getDoc } from 'firebase/firestore'
+import { db } from '../lib/firebase'
+import { postPlace, telUrl, whatsappUrl } from '../lib/jobs'
+import { useJobs } from '../context/Jobs'
 import { relativeTime } from '../lib/format'
 import { useLang } from '../i18n/LanguageContext'
 import Disclaimer from '../components/Disclaimer'
@@ -8,11 +12,21 @@ import Disclaimer from '../components/Disclaimer'
 export default function JobDetail() {
   const { id } = useParams()
   const { t, lang } = useLang()
-  const post = findPost(id)
+  const { getPost, loading } = useJobs()
+  const post = getPost(id)
+  const [cloudPoster, setCloudPoster] = useState('')
+  useEffect(() => {
+    setCloudPoster('')
+    if (!db || !post?.hasPoster) return
+    let cancelled = false
+    getDoc(doc(db, 'jobImages', post.posterId || post.id)).then(s => { if (!cancelled) setCloudPoster(String((s.data() as { data?: string } | undefined)?.data ?? '')) }).catch(() => undefined)
+    return () => { cancelled = true }
+  }, [post?.id, post?.hasPoster, post?.posterId])
+  if (!post && loading) return <div className="content-page"><p>{t('page.loading')}</p></div>
   if (!post) return <div className="content-page page-enter"><div className="empty-state"><h1>{t('job.notFound.title')}</h1><p>{t('job.notFound.desc')}</p><Link className="button button-primary" to="/jobs">{t('job.browse')}</Link></div></div>
 
   const titles = post.positions.map(p => p.title).join(' / ')
-  const place = [post.city, post.country].filter(Boolean).join(', ') || t('job.locationUnknown')
+  const place = postPlace(post, lang) || t('job.locationUnknown')
   const subject = encodeURIComponent(titles)
   const hasContact = post.phones.length > 0 || post.emails.length > 0 || !!post.mapsUrl || !!post.applyUrl
 
@@ -32,7 +46,7 @@ export default function JobDetail() {
 
         <div className="detail-card poster-card">
           <h2>{t('job.poster')}</h2>
-          <img className="poster-image" src={post.posterUrl} alt={`${titles}${post.company ? ` – ${post.company}` : ''}`} loading="lazy" />
+          {(post.posterUrl || cloudPoster) && <img className="poster-image" src={post.posterUrl || cloudPoster} alt={`${titles}${post.company ? ` – ${post.company}` : ''}`} loading="lazy" />}
         </div>
 
         {post.positions.map(pos => <div className="detail-card" key={pos.title}>

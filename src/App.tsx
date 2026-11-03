@@ -11,6 +11,9 @@ import { ADMIN_PATH } from './config'
 import StaticPage from './pages/StaticPage'
 import NotFound from './pages/NotFound'
 import CvBuilder from './pages/CvBuilder'
+import ProfilePage from './pages/ProfilePage'
+import Network from './pages/Network'
+import Messages from './pages/Messages'
 
 const staticPaths = ['companies', 'employer', 'contact', 'help', 'safety', 'privacy', 'terms', 'cookies']
 
@@ -25,6 +28,10 @@ export default function App() {
     <Route path="login" element={<AuthPage mode="login"/>}/>
     <Route path="register" element={<AuthPage mode="register"/>}/>
     <Route path="account" element={<Account/>}/>
+    <Route path="profile" element={<ProfilePage/>}/>
+    <Route path="u/:uid" element={<ProfilePage/>}/>
+    <Route path="network" element={<Network/>}/>
+    <Route path="messages" element={<Messages/>}/>
     {ADMIN_PATH && <Route path={ADMIN_PATH.replace(/^\//, '')} element={<AdminGate/>}/>}
     {staticPaths.map(path => <Route key={path} path={path} element={<StaticPage/>}/>)}
     <Route path="*" element={<NotFound/>}/>
