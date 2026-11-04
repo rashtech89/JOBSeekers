@@ -50,7 +50,7 @@ export default function Upload() {
         generalRequirements: [], howToApply: '',
         phones: f.phone.trim() ? [{ number: f.phone.trim().slice(0, 30), dialCode: f.dialCode.replace(/\D/g, '').slice(0, 6), whatsapp: f.whatsapp, calls: false }] : [],
         emails: f.email.trim() ? [f.email.trim().slice(0, 120)] : [], mapsUrl: '', applyUrl: f.applyUrl.trim(), tags: [],
-        status: 'pending', hasPoster: !!f.poster, posterId: f.poster ? ref.id : '', postedAt: serverTimestamp(), createdAt: serverTimestamp(), source: 'user', createdBy: user.uid,
+        status: 'pending', hasPoster: !!f.poster, posterId: f.poster ? ref.id : '', postedAt: serverTimestamp(), createdAt: serverTimestamp(), source: 'user', createdBy: user.uid, authorName: (user.displayName || 'Member').slice(0, 80),
       })
       st.clear(); setSent(true)
     } catch (e) { st.fail((e as { code?: string }).code === 'permission-denied' ? 'Not allowed. Make sure your email is verified, then sign out and in again.' : 'Could not send. Try again.') }

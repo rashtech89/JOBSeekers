@@ -1,20 +1,20 @@
 import { useMemo, useState, type FormEvent, type ReactNode } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ArrowRight, ArrowUpRight, BriefcaseBusiness, Building2, Globe2, Search, ShieldCheck, Sparkles, Users } from 'lucide-react'
-import { inCountry, jobTabs, listingsFrom, postPlace, tabOf, type JobTab } from '../lib/jobs'
-import { relativeTime } from '../lib/format'
+import { inCountry, jobTabs, listingsFrom, tabOf, type JobTab, type Post } from '../lib/jobs'
 import { useLang } from '../i18n/LanguageContext'
 import { useSiteSettings } from '../context/SiteSettings'
 import { useContent } from '../context/Content'
 import { useJobs } from '../context/Jobs'
 import { useCountry } from '../context/Country'
 import FeedSection from '../components/FeedSection'
+import JobPostCard from '../components/JobPostCard'
 import PeopleSuggestions from '../components/PeopleSuggestions'
 import { useAuth } from '../context/Auth'
 
 export default function Home() {
   const { settings } = useSiteSettings()
-  const { t, lang } = useLang()
+  const { t } = useLang()
   const { home } = useContent()
   const { posts } = useJobs()
   const { country } = useCountry()
@@ -60,7 +60,7 @@ export default function Home() {
       <div className="section-heading"><div><p className="eyebrow">{t('home.recent')}</p><h2>{t('home.recent.title')}</h2><p className="section-subtitle">{t('home.recent.sub')}</p></div><Link className="text-link" to={`/jobs?tab=${tab}`}>{t('home.viewAll')} <ArrowRight size={16}/></Link></div>
       <div className="tab-row" role="tablist">{jobTabs.map(k => <button key={k} role="tab" aria-selected={tab === k} className={tab === k ? 'tab-btn active' : 'tab-btn'} onClick={() => setTab(k)}>{t(`tab.${k}`)}</button>)}</div>
       {tabListings.length === 0 && <div className="empty-state"><p>{t('tab.empty')}</p></div>}
-      <div className="job-grid">{tabListings.slice(0, 6).map(({ key, post, position }) => <article className="job-card" key={key}><div className="job-card-head"><div className="company-mark">{(post.company ?? '?').slice(0, 1)}</div><span className="job-type">{position.category}</span></div><h3><Link to={`/job/${post.id}`}>{position.title}</Link></h3><p className="company-name">{post.company ?? t('job.companyUnknown')}</p><div className="job-meta"><span><Globe2 size={15}/>{postPlace(post, lang) || t('job.locationUnknown')}</span></div><div className="job-card-bottom"><span>{relativeTime(post.postedAt, lang)}</span><Link to={`/job/${post.id}`} aria-label={position.title}><ArrowUpRight size={18}/></Link></div></article>)}</div>
+      <div className="post-feed post-grid">{Array.from(new Map<string, Post>(tabListings.map(l => [l.post.id, l.post] as [string, Post])).values()).slice(0, 6).map(post => <JobPostCard key={post.id} post={post} />)}</div>
     </section>,
     feed: <FeedSection key="feed" />,
     people: user ? <section className="section-block" key="people"><div className="section-heading"><div><p className="eyebrow">NETWORK</p><h2>People you may know</h2><p className="section-subtitle">Connect with job seekers, HR teams and companies.</p></div><Link className="text-link" to="/network">My network <ArrowRight size={16}/></Link></div><PeopleSuggestions /></section> : null,

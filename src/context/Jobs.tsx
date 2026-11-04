@@ -26,6 +26,7 @@ export function docToPost(id: string, d: Record<string, unknown>): Post {
     posterId: str(d.posterId, 60) || undefined, hasPoster: d.hasPoster === true, posterUrl: '', positions: positions.length ? positions : [{ title: 'Job opportunity', category: 'General', requirements: [] }],
     generalRequirements: strs(d.generalRequirements), howToApply: str(d.howToApply, 1000) || undefined, phones, emails: strs(d.emails, 6, 120),
     mapsUrl: str(d.mapsUrl, 400) || undefined, applyUrl: str(d.applyUrl, 400) || undefined, tags: strs(d.tags, 8, 40).filter((t): t is PostTag => (TAGS as string[]).includes(t)),
+    source: str(d.source, 20) || undefined, authorName: str(d.authorName, 80) || undefined, autoDetected: d.autoDetected === true,
     postedAt: toDate(d.postedAt).toISOString(), status,
   }
 }

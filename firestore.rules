@@ -55,7 +55,7 @@ service cloud.firestore {
       allow read: if isAdmin() || resource.data.status in ['published', 'expired'];
       allow create: if isAdmin() || (
         verified()
-        && request.resource.data.keys().hasOnly(['company','countryCode','city','positions','generalRequirements','howToApply','phones','emails','mapsUrl','applyUrl','tags','status','hasPoster','posterId','postedAt','createdAt','source','createdBy'])
+        && request.resource.data.keys().hasOnly(['company','countryCode','city','positions','generalRequirements','howToApply','phones','emails','mapsUrl','applyUrl','tags','status','hasPoster','posterId','postedAt','createdAt','source','createdBy','authorName'])
         && request.resource.data.status == 'pending'
         && request.resource.data.source == 'user'
         && request.resource.data.createdBy == request.auth.uid
@@ -63,6 +63,7 @@ service cloud.firestore {
         && strMax(request.resource.data.company, 120)
         && strMax(request.resource.data.city, 100)
         && strMax(request.resource.data.countryCode, 2)
+        && strMax(request.resource.data.authorName, 80)
       );
       allow update, delete: if isAdmin();
     }

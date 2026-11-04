@@ -6,6 +6,8 @@ import { countryOptions, isCountryCode } from '../../lib/countries'
 import { useLang } from '../../i18n/LanguageContext'
 import { useJobs } from '../../context/Jobs'
 import { readFiles, TEMPLATE_CSV, type PosterImage, type SheetJob } from './bulk'
+import { detectPosterContacts, stopOcr } from '../../lib/ocr'
+import type { Detected } from '../../lib/extract'
 import { AField, StatusLine, useStatus } from './ui'
 
 const httpsOrEmpty = (u: string) => (/^https:\/\/\S+$/i.test(u.trim()) ? u.trim() : '')
@@ -20,6 +22,7 @@ export default function BulkTab() {
   const [busy, setBusy] = useState(false)
   const [progress, setProgress] = useState('')
   const [d, setD] = useState({ countryCode: '', category: 'General', title: '', company: '', phone: '', dialCode: '', email: '', status: 'published' })
+  const [useOcr, setUseOcr] = useState(true)
   const [days, setDays] = useState('30')
   const [oldCount, setOldCount] = useState<number | null>(null)
   const st = useStatus()
@@ -47,13 +50,22 @@ export default function BulkTab() {
     const phone = d.phone.trim()
     const sharedPhones = phone ? [{ number: phone, dialCode: d.dialCode.replace(/\D/g, ''), whatsapp: true, calls: false }] : []
     const jobs: (() => Promise<void>)[] = []
+    let autoCount = 0
     for (const img of images) jobs.push(async () => {
       const ref = doc(collection(db!, 'jobs'))
+      // Optional: read phone numbers, emails, links and QR codes from the poster. Anything found is saved as a DRAFT for an admin to check.
+      let found: Detected | null = null
+      if (useOcr) { try { found = await detectPosterContacts(img.data, d.countryCode, setProgress) } catch { found = null } }
+      const seen = new Set<string>(); const phones: { number: string; dialCode: string; whatsapp: boolean; calls: boolean }[] = []
+      for (const p of [...sharedPhones, ...(found?.phones ?? [])]) { const k = `${p.dialCode}|${p.number}`; if (p.number && !seen.has(k)) { seen.add(k); phones.push({ number: p.number, dialCode: p.dialCode, whatsapp: p.whatsapp, calls: p.calls }) } }
+      const emails = Array.from(new Set([...(d.email.trim() ? [d.email.trim()] : []), ...(found?.emails ?? [])])).slice(0, 4)
+      const auto = !!found && (found.phones.length > 0 || found.emails.length > 0 || !!found.mapsUrl || !!found.applyUrl)
+      if (auto) autoCount++
       await setDoc(doc(db!, 'jobImages', ref.id), { data: img.data, createdAt: serverTimestamp() })
       await setDoc(ref, {
         company: d.company.trim(), countryCode: d.countryCode, city: '', positions: [{ title: d.title.trim() || 'Job vacancy (see poster)', category: d.category.trim() || 'General', requirements: [] }],
-        generalRequirements: [], howToApply: '', phones: sharedPhones, emails: d.email.trim() ? [d.email.trim()] : [], mapsUrl: '', applyUrl: '', tags: [],
-        status: STATUSES.includes(d.status) ? d.status : 'draft', hasPoster: true, posterId: ref.id, postedAt: serverTimestamp(), createdAt: serverTimestamp(), source: 'bulk', batchId,
+        generalRequirements: [], howToApply: '', phones: phones.slice(0, 4), emails, mapsUrl: httpsOrEmpty(found?.mapsUrl ?? ''), applyUrl: httpsOrEmpty(found?.applyUrl ?? ''), tags: [],
+        status: auto ? 'draft' : (STATUSES.includes(d.status) ? d.status : 'draft'), hasPoster: true, posterId: ref.id, postedAt: serverTimestamp(), createdAt: serverTimestamp(), source: 'bulk', batchId, autoDetected: auto,
       })
     })
     for (const r of rows) jobs.push(async () => {
@@ -75,9 +87,10 @@ export default function BulkTab() {
       }
     }
     await Promise.all([worker(), worker(), worker(), worker()])
+    await stopOcr()
     setBusy(false); setProgress('')
     if (failed.length === total) st.fail('Nothing was uploaded. Publish the latest firestore.rules and check your admin account.')
-    else { st.ok(`Uploaded ${total - failed.length} of ${total}.${failed.length ? ` Failed: ${failed.join(', ')}.` : ''}`); setImages([]); setRows([]); await refresh() }
+    else { st.ok(`Uploaded ${total - failed.length} of ${total}.${failed.length ? ` Failed: ${failed.join(', ')}.` : ''}${autoCount ? ` ${autoCount} poster(s) had contact details read automatically and were saved as DRAFT. Open the Jobs tab, check the numbers, then press Verify & publish.` : ''}`); setImages([]); setRows([]); await refresh() }
   }
 
   const cutoff = () => Timestamp.fromDate(new Date(Date.now() - Math.max(1, Number(days) || 30) * 86_400_000))
@@ -121,6 +134,7 @@ export default function BulkTab() {
       <div className="cv-row"><AField label="Job title (optional)" value={d.title} onChange={v => set('title', v)} /><AField label="Company (optional)" value={d.company} onChange={v => set('company', v)} /></div>
       <div className="cv-row"><AField label="WhatsApp number (optional)" value={d.phone} onChange={v => set('phone', v)} /><AField label="Country dial code (e.g. 965)" value={d.dialCode} onChange={v => set('dialCode', v)} /></div>
       <AField label="Email (optional)" value={d.email} onChange={v => set('email', v)} />
+      <label className="admin-checks"><span><input type="checkbox" checked={useOcr} onChange={e => setUseOcr(e.target.checked)} /> Read phone numbers, emails, links and QR codes from the poster pictures (slower, needs internet; results are saved as Draft for you to check)</span></label>
       <label className="cv-field"><span>After upload</span><select value={d.status} onChange={e => set('status', e.target.value)}><option value="published">Publish now</option><option value="draft">Save as draft (hidden)</option></select></label>
       <button className="button button-primary" disabled={busy || images.length + rows.length === 0} onClick={() => void upload()}><Upload size={16}/> Upload {images.length + rows.length} job(s)</button>
       <StatusLine status={st.status} />

@@ -174,3 +174,26 @@ body{background:radial-gradient(900px 520px at 88% -6%,var(--amb1,rgba(22,168,14
 .verify-box{display:grid;gap:8px}
 input[type='color']{height:46px;padding:4px;width:100%;cursor:pointer}
 .admin-tabs{overflow-x:auto}
+
+/* ===== Facebook-style job posts: header, full poster, Apply + Share ===== */
+.post-feed{display:grid;gap:18px;max-width:640px;margin:0 auto}
+.post-feed.post-grid{max-width:none;grid-template-columns:repeat(auto-fill,minmax(300px,1fr));align-items:start}
+.post-card{background:var(--paper);border:1px solid var(--line);border-radius:16px;overflow:hidden;display:block}
+.post-head{display:flex;gap:10px;align-items:center;padding:12px 14px}
+.post-head strong{display:block;line-height:1.2}
+.post-head small{display:block;color:var(--muted);font-size:.8rem;margin-top:2px}
+.post-text{padding:0 14px 10px}
+.post-text h3,.post-text .post-title{margin:0 0 4px;font-size:1.05rem}
+.post-text ul{margin:6px 0 0;padding-inline-start:18px;color:var(--muted);font-size:.9rem}
+.post-poster{background:rgba(127,127,127,.08)}
+.post-poster a{display:block}
+.post-poster-img{display:block;width:100%;height:auto}
+.post-poster-skel{aspect-ratio:3/4;background:linear-gradient(90deg,rgba(127,127,127,.08),rgba(127,127,127,.18),rgba(127,127,127,.08));background-size:200% 100%;animation:skel 1.4s linear infinite}
+@keyframes skel{from{background-position:200% 0}to{background-position:-200% 0}}
+.apply-wrap{padding:12px 14px;display:grid;gap:10px}
+.apply-bar{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.apply-bar .button{justify-content:center}
+.contact-sheet{display:grid;gap:8px}
+.load-more{text-align:center;margin:20px 0}
+.post-detail{max-width:680px;margin:0 auto;display:grid;gap:16px}
+@media(prefers-reduced-motion:reduce){.post-poster-skel{animation:none}}

@@ -3,6 +3,8 @@ import { collection, deleteDoc, doc, getDocs, limit, orderBy, query, serverTimes
 import { Plus, Save } from 'lucide-react'
 import { db } from '../../lib/firebase'
 import { compressImage } from '../../lib/images'
+import { loadPoster } from '../../lib/posters'
+import { detectPosterContacts, stopOcr } from '../../lib/ocr'
 import { countryOptions, isCountryCode } from '../../lib/countries'
 import { useLang } from '../../i18n/LanguageContext'
 import { useJobs } from '../../context/Jobs'
@@ -38,6 +40,7 @@ export default function JobsTab() {
   const [rows, setRows] = useState<Row[]>([])
   const [form, setForm] = useState<Form | null>(null)
   const st = useStatus()
+  const [scanning, setScanning] = useState('')
   const load = useCallback(async () => {
     if (!db) return
     try {
@@ -51,6 +54,28 @@ export default function JobsTab() {
   }, [])
   useEffect(() => { void load() }, [load])
   const set = <K extends keyof Form>(k: K, v: Form[K]) => setForm(f => (f ? { ...f, [k]: v } : f))
+
+  // Reads phone numbers, emails and QR links from the poster picture. It only fills EMPTY boxes; the admin must check the result.
+  const scanPoster = async () => {
+    if (!form) return
+    setScanning('Starting…'); st.clear()
+    try {
+      const img = form.newPoster || await loadPoster(form.posterId || form.id || '')
+      if (!img) { st.fail('Add a poster picture first.'); return }
+      const found = await detectPosterContacts(img, form.countryCode, setScanning)
+      const first = found.phones[0]
+      setForm(f => f ? {
+        ...f, phone: f.phone || first?.number || '', dialCode: f.dialCode || first?.dialCode || '',
+        whatsapp: f.phone ? f.whatsapp : first ? first.whatsapp : f.whatsapp, calls: f.phone ? f.calls : first ? first.calls : f.calls,
+        email: f.email || found.emails[0] || '', mapsUrl: f.mapsUrl || found.mapsUrl, applyUrl: f.applyUrl || found.applyUrl,
+      } : f)
+      const parts = [
+        found.phones.length ? `phone: ${found.phones.map(p => `${p.dialCode ? `+${p.dialCode} ` : ''}${p.number}`).join(', ')}` : '',
+        found.emails.length ? `email: ${found.emails.join(', ')}` : '', found.applyUrl ? 'apply link' : '', found.mapsUrl ? 'map link' : '',
+      ].filter(Boolean)
+      parts.length ? st.ok(`Found ${parts.join(' · ')}. Please compare with the poster, then save.`) : st.fail('No phone, email or QR link could be read. Type the details by hand.')
+    } catch (e) { st.fail((e as Error).message || 'Could not read the poster.') } finally { setScanning(''); void stopOcr() }
+  }
 
   const pickPoster = async (file?: File) => {
     if (!file) return
@@ -76,7 +101,7 @@ export default function JobsTab() {
         generalRequirements: Array.isArray(form.raw.generalRequirements) ? form.raw.generalRequirements : [], howToApply: form.howToApply.trim(),
         phones: form.phone.trim() ? [{ number: form.phone.trim(), dialCode: form.dialCode.replace(/\D/g, ''), whatsapp: form.whatsapp, calls: form.calls }] : [],
         emails: form.email.trim() ? [form.email.trim()] : [], mapsUrl: form.mapsUrl.trim(), applyUrl: form.applyUrl.trim(), tags: Array.isArray(form.raw.tags) ? form.raw.tags : [],
-        status: form.status, hasPoster, posterId,
+        status: form.status, hasPoster, posterId, autoDetected: false,
       }
       form.id ? await updateDoc(ref, data) : await setDoc(ref, { ...data, postedAt: serverTimestamp(), createdAt: serverTimestamp(), source: 'admin' })
       st.ok('Saved.'); setForm(null); await load(); await refresh()
@@ -84,7 +109,7 @@ export default function JobsTab() {
   }
   const approve = async (r: Row) => {
     if (!db) return
-    try { await updateDoc(doc(db, 'jobs', r.id), { status: 'published', postedAt: serverTimestamp() }); st.ok('Approved and published.'); await load(); await refresh() }
+    try { await updateDoc(doc(db, 'jobs', r.id), { status: 'published', postedAt: serverTimestamp(), autoDetected: false }); st.ok('Approved and published.'); await load(); await refresh() }
     catch { st.fail('Could not approve. Publish the latest firestore.rules.') }
   }
   const remove = async (r: Row) => {
@@ -110,7 +135,8 @@ export default function JobsTab() {
     <div className="cv-row"><AField label="Google Maps link (https)" value={form.mapsUrl} onChange={v => set('mapsUrl', v)} /><AField label="Apply link (https)" value={form.applyUrl} onChange={v => set('applyUrl', v)} /></div>
     <label className="cv-field"><span>Status</span><select value={form.status} onChange={e => set('status', e.target.value)}><option value="published">Published (visible)</option><option value="pending">Waiting for approval (hidden)</option><option value="draft">Draft (hidden)</option><option value="expired">Expired (shown in Old jobs)</option></select></label>
     <div className="cv-photo-row">{form.newPoster && <img src={form.newPoster} alt="New poster" style={{ width: 90, height: 120, objectFit: 'cover', borderRadius: 8 }} />}
-      <label className="button button-outline">{form.hasPoster || form.newPoster ? 'Replace poster picture' : 'Add poster picture'}<input type="file" accept="image/*" hidden onChange={e => { void pickPoster(e.target.files?.[0]); e.target.value = '' }} /></label></div>
+      <label className="button button-outline">{form.hasPoster || form.newPoster ? 'Replace poster picture' : 'Add poster picture'}<input type="file" accept="image/*" hidden onChange={e => { void pickPoster(e.target.files?.[0]); e.target.value = '' }} /></label>
+      {(form.hasPoster || form.newPoster) && <button className="button button-outline" disabled={!!scanning} onClick={() => void scanPoster()}>{scanning || 'Read phone / email / QR from the poster'}</button>}</div>
     <div className="admin-checks"><button className="button button-primary" onClick={() => void save()}><Save size={16}/> Save job</button><button className="button button-outline" onClick={() => { setForm(null); st.clear() }}>Cancel</button></div>
     <StatusLine status={st.status} />
   </section>
@@ -118,7 +144,7 @@ export default function JobsTab() {
   return <section className="cv-card"><div className="admin-row-head"><div className="cv-card-title">Jobs (newest {rows.length})</div>
     <button className="button button-primary" onClick={() => { setForm(blank()); st.clear() }}><Plus size={16}/> Add a job</button></div>
     {rows.length === 0 && <p className="small-note">No jobs yet. Add one, or use "Bulk upload jobs".</p>}
-    {rows.map(r => <div className="admin-row" key={r.id}><div className="admin-row-head"><strong>{r.title}</strong><span>{r.status === 'pending' && <><button className="icon-btn" onClick={() => void approve(r)}>Approve</button> </>}<button className="icon-btn" onClick={() => setForm(toForm(r))}>Edit</button> <button className="icon-btn" onClick={() => void remove(r)}>Delete</button></span></div>
-      <small>{r.company || 'Company not named'} · {r.countryCode || 'no country'} · {r.status}</small></div>)}
+    {rows.map(r => <div className="admin-row" key={r.id}><div className="admin-row-head"><strong>{r.title}</strong><span>{(r.status === 'pending' || (r.status === 'draft' && r.raw.autoDetected === true)) && <><button className="icon-btn" onClick={() => void approve(r)}>{r.status === 'pending' ? 'Approve' : 'Verify & publish'}</button> </>}<button className="icon-btn" onClick={() => setForm(toForm(r))}>Edit</button> <button className="icon-btn" onClick={() => void remove(r)}>Delete</button></span></div>
+      <small>{r.company || 'Company not named'} · {r.countryCode || 'no country'} · {r.status}{r.raw.autoDetected === true ? ' · contacts read automatically: please check them' : ''}</small></div>)}
     <StatusLine status={st.status} /></section>
 }

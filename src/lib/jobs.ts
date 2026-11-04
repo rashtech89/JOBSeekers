@@ -41,6 +41,11 @@ export type Post = {
   mapsUrl?: string
   applyUrl?: string
   tags: PostTag[]
+  /** Who shared it. Admin, bulk and sheet uploads show as the site panel; member posts show the member's name. */
+  source?: string
+  authorName?: string
+  /** Contact details were read from the poster by OCR and still need an admin check. */
+  autoDetected?: boolean
   postedAt: string // ISO date
   status: 'draft' | 'pending' | 'published' | 'expired' | 'archived'
 }
