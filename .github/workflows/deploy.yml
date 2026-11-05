@@ -1,4 +1,5 @@
-name: Deploy to GitHub Pages
+
+name: Build and Deploy to Firebase Hosting
 
 on:
   push:
@@ -7,28 +8,30 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
-  group: pages
+  group: firebase-hosting-live
   cancel-in-progress: true
 
 jobs:
-  build:
+  build_and_deploy:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
         with:
           node-version: 20
+
       - name: Install dependencies
         run: npm install --no-audit --no-fund
-      - name: Build
+
+      - name: Build Vite app
         run: npm run build
         env:
-          # Sub-path for a project site (https://USER.github.io/REPO/). Change to "/" for a USER.github.io repository or a custom domain.
-          VITE_BASE: /${{ github.event.repository.name }}/
+          VITE_BASE: /
           VITE_ADMIN_PATH: ${{ vars.VITE_ADMIN_PATH }}
           VITE_FIREBASE_API_KEY: ${{ vars.VITE_FIREBASE_API_KEY }}
           VITE_FIREBASE_AUTH_DOMAIN: ${{ vars.VITE_FIREBASE_AUTH_DOMAIN }}
@@ -36,19 +39,10 @@ jobs:
           VITE_FIREBASE_STORAGE_BUCKET: ${{ vars.VITE_FIREBASE_STORAGE_BUCKET }}
           VITE_FIREBASE_MESSAGING_SENDER_ID: ${{ vars.VITE_FIREBASE_MESSAGING_SENDER_ID }}
           VITE_FIREBASE_APP_ID: ${{ vars.VITE_FIREBASE_APP_ID }}
-      - name: Single-page-app fallback (refresh on any page keeps working)
-        run: cp dist/index.html dist/404.html
-      - uses: actions/configure-pages@v5
-      - uses: actions/upload-pages-artifact@v3
-        with:
-          path: dist
 
-  deploy:
-    needs: build
-    runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Deploy to Firebase Hosting
+        uses: FirebaseExtended/action-hosting-deploy@v0
+        with:
+          firebaseServiceAccount: ${{ secrets.FIREBASE_SERVICE_ACCOUNT_JOB_SEEKERS }}
+          projectId: job-seekers-2
+          channelId: live
